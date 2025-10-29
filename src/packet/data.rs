@@ -1,5 +1,3 @@
-use crate::util::raw_u32_be;
-
 #[derive(Debug)]
 pub enum PacketPosition {
     Middle,
@@ -26,8 +24,8 @@ pub struct DataPacket {
 }
 
 impl DataPacket {
-    pub fn from_raw(raw: &[u8]) -> Self {
-        let packet_sequence_number = raw_u32_be(&raw[0..4]) & !(1 << 31);
+    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
+        let packet_sequence_number = u32::from_be_bytes(raw[0..4].try_into()?) & !(1 << 31);
 
         let fb = raw[4];
         let position = match (fb & 0b1100_0000) >> 6 {
@@ -54,19 +52,23 @@ impl DataPacket {
             _ => unreachable!(),
         };
 
-        let message_number = raw_u32_be(&raw[4..8]) & !(0b11_11_11 << 26);
+        let message_number = u32::from_be_bytes(raw[4..8].try_into()?) & !(0b11_11_11 << 26);
 
-        Self {
+        Ok(Self {
             packet_sequence_number,
             position,
             order,
             encryption,
             retransmitted,
             message_number,
-        }
+        })
     }
 
-    pub fn to_raw(&self) -> Vec<u8> {
+    pub fn raw_header(&self) -> Vec<u8> {
+        todo!()
+    }
+
+    pub fn raw_content(&self) -> Vec<u8> {
         todo!()
     }
 }

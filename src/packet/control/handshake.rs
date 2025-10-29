@@ -27,9 +27,9 @@ auto_try_from! {
 
 #[derive(Clone, Debug)]
 pub struct HandshakeExtension {
-    pub extension_type: u16,
-    pub extension_length: u16,
-    pub extension_content: Vec<u8>,
+    pub r#type: u16,
+    pub length: u16,
+    pub content: Vec<u8>,
 }
 
 /// [ 48 BYTES (+ Extension) ]
@@ -70,14 +70,14 @@ impl Handshake {
         );
 
         let extension = if raw.len() > 48 {
-            let extension_type = u16::from_be_bytes(raw[48..50].try_into()?);
-            let extension_length = u16::from_be_bytes(raw[50..52].try_into()?);
-            let extension_content = Vec::from(&raw[52..(52 + extension_length as usize)]);
+            let r#type = u16::from_be_bytes(raw[48..50].try_into()?);
+            let length = u16::from_be_bytes(raw[50..52].try_into()?);
+            let content = Vec::from(&raw[52..(52 + length as usize)]);
 
             Some(HandshakeExtension {
-                extension_type,
-                extension_length,
-                extension_content,
+                r#type,
+                length,
+                content,
             })
         } else {
             None
@@ -117,9 +117,9 @@ impl Handshake {
         res.extend(self.peer_ip_address.3.to_be_bytes());
 
         if let Some(ext) = &self.extension {
-            res.extend(ext.extension_type.to_be_bytes());
-            res.extend(ext.extension_length.to_be_bytes());
-            res.extend(ext.extension_content.clone());
+            res.extend(ext.r#type.to_be_bytes());
+            res.extend(ext.length.to_be_bytes());
+            res.extend(ext.content.clone());
         }
 
         res

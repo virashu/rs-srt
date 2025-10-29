@@ -1,7 +1,6 @@
-mod handshake;
-pub use handshake::Handshake;
+use crate::packet::control::handshake::Handshake;
 
-use crate::util::parse_be;
+pub mod handshake;
 
 pub mod control_types {
     pub const HANDSHAKE: u16 = 0x0000;
@@ -16,38 +15,7 @@ pub mod control_types {
     pub const OTHER: u16 = 0x7FFF;
 }
 
-#[repr(u16)]
-#[derive(Clone, Copy, Debug)]
-pub enum ControlType {
-    Handshake = 0x0000,
-    KeepAlive,
-    Ack,
-    Nak,
-    CongestionWarning,
-    Shutdown,
-    AckAck,
-    DropReq,
-    PeerError,
-    Other(u16),
-}
-
-impl From<u16> for ControlType {
-    fn from(value: u16) -> Self {
-        match value {
-            0x0000 => Self::Handshake,
-            0x0001 => Self::KeepAlive,
-            0x0002 => Self::Ack,
-            0x0003 => Self::Nak,
-            0x0004 => Self::CongestionWarning,
-            0x0005 => Self::Shutdown,
-            0x0006 => Self::AckAck,
-            0x0007 => Self::DropReq,
-            0x0008 => Self::PeerError,
-            other => Self::Other(other),
-        }
-    }
-}
-
+#[derive(Clone, Debug)]
 pub enum ControlInformation {
     Handshake(Handshake),
 }
@@ -55,7 +23,7 @@ pub enum ControlInformation {
 impl ControlInformation {
     pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
         let control_type = u16::from_be_bytes(raw[0..2].try_into()?) & !(1 << 15);
-        let subtype = u16::from_be_bytes(raw[2..4].try_into()?);
+        let _subtype = u16::from_be_bytes(raw[2..4].try_into()?);
 
         // Data after package header
         let content = &raw[16..];
@@ -65,33 +33,22 @@ impl ControlInformation {
             _ => todo!(),
         })
     }
-}
 
-#[derive(Debug)]
-pub struct ControlPacket {
-    pub control_type: ControlType,
-    pub subtype: u16,
-}
-
-impl ControlPacket {
-    pub fn from_raw(raw: &[u8]) -> Self {
-        let control_type = (parse_be::<u16>(&raw[0..2]) & !(1 << 15)).into();
-        let subtype = parse_be::<u16>(&raw[2..4]);
-
-        Self {
-            control_type,
-            subtype,
+    pub fn raw_header(&self) -> Vec<u8> {
+        match self {
+            Self::Handshake(_) => [
+                (control_types::HANDSHAKE | (1 << 15)).to_be_bytes(),
+                [0, 0],
+                [0, 0],
+                [0, 0],
+            ]
+            .concat(),
         }
     }
 
-    pub fn to_raw(&self) -> Vec<u8> {
-        // let mut res = Vec::new();
-
-        // res.extend((self.control_type as u16).to_be_bytes());
-        // res.extend(self.subtype.to_be_bytes());
-
-        // res
-        
-        todo!()
+    pub fn raw_content(&self) -> Vec<u8> {
+        match self {
+            Self::Handshake(h) => h.to_raw(),
+        }
     }
 }
