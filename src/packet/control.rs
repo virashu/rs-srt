@@ -1,6 +1,10 @@
-use crate::packet::control::handshake::Handshake;
+use crate::{
+    packet::control::{handshake::Handshake, keep_alive::KeepAlive},
+    serial::Serial,
+};
 
 pub mod handshake;
+pub mod keep_alive;
 
 pub mod control_types {
     pub const HANDSHAKE: u16 = 0x0000;
@@ -18,6 +22,7 @@ pub mod control_types {
 #[derive(Clone, Debug)]
 pub enum ControlInformation {
     Handshake(Handshake),
+    KeepAlive(KeepAlive),
 }
 
 impl ControlInformation {
@@ -30,25 +35,23 @@ impl ControlInformation {
 
         Ok(match control_type {
             control_types::HANDSHAKE => Self::Handshake(Handshake::from_raw(content)?),
-            _ => todo!(),
+            _ => todo!("{control_type}"),
         })
     }
 
     pub fn raw_header(&self) -> Vec<u8> {
-        match self {
-            Self::Handshake(_) => [
-                (control_types::HANDSHAKE | (1 << 15)).to_be_bytes(),
-                [0, 0],
-                [0, 0],
-                [0, 0],
-            ]
-            .concat(),
-        }
+        let r#type = match self {
+            Self::Handshake(_) => control_types::HANDSHAKE,
+            Self::KeepAlive(_) => control_types::KEEPALIVE,
+        };
+
+        [(r#type | (1 << 15)).to_be_bytes(), [0, 0], [0, 0], [0, 0]].concat()
     }
 
     pub fn raw_content(&self) -> Vec<u8> {
         match self {
             Self::Handshake(h) => h.to_raw(),
+            Self::KeepAlive(k) => k.to_raw(),
         }
     }
 }
