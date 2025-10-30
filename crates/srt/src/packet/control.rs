@@ -88,7 +88,7 @@ impl ControlPacketInfo {
     /// Get `Control Information Field (CIF)`
     pub fn raw_content(&self) -> Vec<u8> {
         match self {
-            Self::Handshake(h) => h.to_raw_cif(),
+            Self::Handshake(h) => h.raw_content(),
             Self::Ack(ack) => ack.raw_content(),
             Self::Nak(_) => todo!(),
             Self::DropReq(_) => todo!(),

@@ -21,6 +21,7 @@ pub struct DataPacketInfo {
     pub encryption: EncryptionFlag,
     pub retransmitted: bool,
     pub message_number: u32,
+    pub content: Vec<u8>,
 }
 
 impl DataPacketInfo {
@@ -53,6 +54,7 @@ impl DataPacketInfo {
         };
 
         let message_number = u32::from_be_bytes(raw[4..8].try_into()?) & !(0b11_11_11 << 26);
+        let content = Vec::from(&raw[8..]);
 
         Ok(Self {
             packet_sequence_number,
@@ -61,6 +63,7 @@ impl DataPacketInfo {
             encryption,
             retransmitted,
             message_number,
+            content,
         })
     }
 

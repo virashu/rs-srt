@@ -29,7 +29,10 @@ auto_try_from! {
     }
 }
 
+/// (No Header)
+///
 /// `Control Information Field` of `Handshake`
+///
 /// [ 48 BYTES (+ Extensions) ]
 #[derive(Clone, Debug)]
 pub struct Handshake {
@@ -101,7 +104,7 @@ impl Handshake {
         })
     }
 
-    pub fn to_raw_cif(&self) -> Vec<u8> {
+    pub fn raw_content(&self) -> Vec<u8> {
         let mut res = Vec::new();
 
         res.extend(self.version.to_be_bytes());
@@ -140,6 +143,6 @@ mod tests {
 
         let h = Handshake::from_raw_cif(&raw).unwrap();
 
-        assert_eq!(raw, h.to_raw_cif().as_slice());
+        assert_eq!(raw, h.raw_content().as_slice());
     }
 }
