@@ -1,3 +1,4 @@
+#![allow(clippy::missing_errors_doc)]
 #![forbid(clippy::print_stdout)]
 
 pub mod connection;

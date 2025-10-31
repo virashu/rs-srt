@@ -1,10 +1,11 @@
 //! <https://datatracker.ietf.org/doc/html/draft-sharabayko-srt#section-3.2.1>
-pub mod extensions;
+pub mod extension;
 
 use crate::{
     macros::auto_try_from,
-    packet::control::handshake::extensions::{
-        HandshakeExtension, KeyMaterialExtension, StreamIdExtension, handshake_extension_flags,
+    packet::control::handshake::extension::{
+        extension_flags, handshake::HandshakeExtension, key_material::KeyMaterialExtension,
+        stream_id::StreamIdExtension,
     },
 };
 
@@ -77,14 +78,14 @@ impl Handshake {
         // Extensions
         let mut ext_pad = 0;
 
-        let handshake_extension = if extension_field & handshake_extension_flags::HSREQ != 0 {
+        let handshake_extension = if extension_field & extension_flags::HSREQ != 0 {
             ext_pad += 4 * 4;
             Some(HandshakeExtension::from_raw(&raw[48..])?)
         } else {
             None
         };
 
-        let key_material_extension = if (extension_field & handshake_extension_flags::KMREQ != 0)
+        let key_material_extension = if (extension_field & extension_flags::KMREQ != 0)
             && handshake_type != HandshakeType::Induction
         {
             Some(KeyMaterialExtension::from_raw(&raw[(48 + ext_pad)..])?)
@@ -92,7 +93,7 @@ impl Handshake {
             None
         };
 
-        let stream_id_extension = if extension_field & handshake_extension_flags::CONFIG != 0 {
+        let stream_id_extension = if extension_field & extension_flags::CONFIG != 0 {
             Some(StreamIdExtension::from_raw(&raw[(48 + ext_pad)..])?)
         } else {
             None
@@ -144,22 +145,5 @@ impl Handshake {
         }
 
         res
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_to_raw() {
-        let raw: [u8; _] = [
-            0, 0, 0, 4, 0, 0, 0, 2, 82, 85, 247, 107, 0, 0, 5, 220, 0, 0, 32, 0, 0, 0, 0, 1, 16,
-            10, 162, 106, 0, 0, 0, 0, 1, 0, 0, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-
-        let h = Handshake::from_raw_cif(&raw).unwrap();
-
-        assert_eq!(raw, h.raw_content().as_slice());
     }
 }

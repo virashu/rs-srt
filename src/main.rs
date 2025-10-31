@@ -1,4 +1,4 @@
-use srt::connection::connect;
+use srt::server::Server;
 use tracing::Level;
 
 use std::{
@@ -9,13 +9,22 @@ use std::{
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
-    let callback = |mpeg_packet: &[u8]| {
-        let mut file = OpenOptions::new().append(true).open("a.mpg").unwrap();
-        file.write_all(mpeg_packet).unwrap();
-    };
+    let mut server = Server::new()?;
 
-    fs::write("a.mpg", []).unwrap();
-    loop {
-        connect(&callback)?;
-    }
+    server.on_connect(&|id| {
+        fs::write(format!("_local/stream_{id}.mpg"), []).unwrap();
+    });
+
+    server.on_data(&|id: &str, mpeg_packet: &[u8]| {
+        let mut file = OpenOptions::new()
+            .append(true)
+            .open(format!("_local/stream_{id}.mpg"))
+            .unwrap();
+
+        file.write_all(mpeg_packet).unwrap();
+    });
+
+    server.run()?;
+
+    Ok(())
 }
