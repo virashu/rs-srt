@@ -131,6 +131,7 @@ name = "hls"
 version = "0.0.0"
 dependencies = [
  "axum",
+ "tokio",
 ]
 
 [[package]]
@@ -272,6 +273,9 @@ dependencies = [
 [[package]]
 name = "mpeg"
 version = "0.0.0"
+dependencies = [
+ "anyhow",
+]
 
 [[package]]
 name = "nu-ansi-term"
@@ -329,6 +333,8 @@ name = "rs-srt"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "hls",
+ "mpeg",
  "srt",
  "tracing",
  "tracing-subscriber",

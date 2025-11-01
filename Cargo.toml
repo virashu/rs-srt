@@ -6,6 +6,8 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.100"
 srt = { path = "./crates/srt" }
+hls = { path = "./crates/hls" }
+mpeg = { path = "./crates/mpeg" }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.20"
 

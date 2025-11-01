@@ -5,16 +5,16 @@ use std::{
 
 use crate::{
     connection::Connection,
-    ops::{handshake_v5, make_full_ack},
+    ops::handshake_v5,
     packet::{
         Packet, PacketContent,
         control::{ControlPacketInfo, ack::Ack},
     },
 };
 
-type OnConnectHandler = dyn Fn(&str);
-type OnDiscnnectHandler = dyn Fn(&str);
-type OnDataHandler = dyn Fn(&str, &[u8]);
+type OnConnectHandler = dyn Fn(&Connection);
+type OnDiscnnectHandler = dyn Fn(&Connection);
+type OnDataHandler = dyn Fn(&Connection, &[u8]);
 
 pub struct Server {
     socket: UdpSocket,
@@ -82,11 +82,10 @@ impl Server {
                     )?;
                 }
 
-                let stream_id = conn.stream_id.clone().unwrap_or_default();
                 let mpeg_packet = &data.content[..];
 
                 if let Some(callback) = &self.on_data {
-                    callback(&stream_id, mpeg_packet);
+                    callback(conn, mpeg_packet);
                 }
             }
         }
@@ -108,12 +107,10 @@ impl Server {
                     pack.content,
                     PacketContent::Control(ControlPacketInfo::Shutdown)
                 ) {
-                    if let Some(conn) = self.connections.remove(&addr) {
-                        let stream_id = conn.stream_id.clone().unwrap_or_default();
-
-                        if let Some(callback) = &self.on_disconnect {
-                            callback(&stream_id);
-                        }
+                    if let Some(conn) = self.connections.remove(&addr)
+                        && let Some(callback) = &self.on_disconnect
+                    {
+                        callback(&conn);
                     }
 
                     continue;
@@ -125,8 +122,7 @@ impl Server {
                     continue;
                 };
                 if let Some(callback) = &self.on_connect {
-                    let stream_id = conn.stream_id.clone().unwrap_or_default();
-                    callback(&stream_id);
+                    callback(&conn);
                 }
                 self.connections.insert(addr, conn);
             }

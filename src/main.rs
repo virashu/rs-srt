@@ -1,35 +1,42 @@
 use srt::server::Server;
 use tracing::Level;
 
-use std::{
-    fs::{self, OpenOptions},
-    io::Write,
-};
+use std::{fs, io::Write, time::SystemTime};
+
+fn run_hls() -> anyhow::Result<()> {
+    tracing::info!("Starting HLS");
+    hls::run();
+
+    Ok(())
+}
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
-    let mut server = Server::new()?;
+    let mut srt_server = Server::new()?;
 
-    server.on_connect(&|id| {
-        tracing::info!("Client connected: {id:?}");
-        fs::write(format!("_local/stream_{id}.mpg"), []).unwrap();
+    srt_server.on_connect(&|conn| {
+        tracing::info!(
+            "Client connected: {:?}",
+            conn.stream_id.clone().unwrap_or_default()
+        );
     });
 
-    server.on_disconnect(&|id| {
-        tracing::info!("Client disconnected: {id:?}");
+    srt_server.on_disconnect(&|conn| {
+        tracing::info!(
+            "Client disconnected: {:?}",
+            conn.stream_id.clone().unwrap_or_default()
+        );
     });
 
-    server.on_data(&|id: &str, mpeg_packet: &[u8]| {
-        let mut file = OpenOptions::new()
-            .append(true)
-            .open(format!("_local/stream_{id}.mpg"))
-            .unwrap();
+    srt_server.on_data(&|conn, mpeg_packet| {
+        let id = conn.stream_id.clone().unwrap_or_default();
 
-        file.write_all(mpeg_packet).unwrap();
+        println!("{mpeg_packet:?}");
     });
 
-    server.run()?;
+    tracing::info!("Starting SRT");
+    srt_server.run()?;
 
     Ok(())
 }

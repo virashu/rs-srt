@@ -54,7 +54,8 @@ impl DataPacketInfo {
         };
 
         let message_number = u32::from_be_bytes(raw[4..8].try_into()?) & !(0b11_11_11 << 26);
-        let content = Vec::from(&raw[8..]);
+
+        let content = Vec::from(&raw[16..]);
 
         Ok(Self {
             packet_sequence_number,
