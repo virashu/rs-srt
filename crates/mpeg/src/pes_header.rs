@@ -50,23 +50,24 @@ pub struct PesHeader {
     pub copyright: bool,
     /// 1b
     pub original_or_copy: OriginalOrCopy,
+    // (8b flags)
     /// 8b
     pub pes_header_data_length: u8,
 
     // Optional fields
-    /// 33b?
+    /// (2b) + 33b?
     pub pts_dts: Option<u64>,
-    /// 42b?
+    /// (1b) + 42b?
     pub escr: Option<u64>,
-    /// 22b?
+    /// (1b) + 22b?
     pub es_rate: Option<u32>,
-    /// 8b?
+    /// (1b) + 8b?
     pub dsm_trick_mode: Option<u8>,
-    /// 7b?
+    /// (1b) + 7b?
     pub additional_copy_info: Option<u8>,
-    /// 16b?
+    /// (1b) + 16b?
     pub previous_pes_crc: Option<u16>,
-    /// n?
+    /// (1b) + n?
     pub pes_extension: Option<PesExtension>,
 }
 
