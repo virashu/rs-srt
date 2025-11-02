@@ -1,4 +1,4 @@
-use bit::{Bit, from_bits};
+use bit::{Bit, Bits, from_bits};
 
 #[derive(Clone, Debug)]
 pub struct PesExtension {
@@ -38,6 +38,40 @@ impl From<bool> for OriginalOrCopy {
 }
 
 #[derive(Debug)]
+pub enum PtsDts {
+    Pts { pts: u64 },
+    PtsDts { pts: u64, dts: u64 },
+}
+
+impl PtsDts {
+    pub fn pts(raw: &[u8]) -> Self {
+        let mut pts = 0;
+
+        pts |= raw.bits::<u64>(4, 3) << 29;
+        pts |= raw.bits::<u64>(8, 15) << 15;
+        pts |= raw.bits::<u64>(16, 15);
+
+        Self::Pts { pts }
+    }
+
+    pub fn pts_dts(raw: &[u8]) -> Self {
+        let mut pts = 0;
+
+        pts |= raw.bits::<u64>(4, 3) << 29;
+        pts |= raw.bits::<u64>(8, 15) << 15;
+        pts |= raw.bits::<u64>(16, 15);
+
+        let mut dts = 0;
+
+        dts |= raw.bits::<u64>(44, 3) << 29;
+        dts |= raw.bits::<u64>(48, 15) << 15;
+        dts |= raw.bits::<u64>(66, 15);
+
+        Self::PtsDts { pts, dts }
+    }
+}
+
+#[derive(Debug)]
 pub struct PesHeader {
     // 2b const
     /// 2b
@@ -55,8 +89,8 @@ pub struct PesHeader {
     pub pes_header_data_length: u8,
 
     // Optional fields
-    /// (2b) + 33b?
-    pub pts_dts: Option<u64>,
+    /// (2b) + {0,40,80}b
+    pub pts_dts: Option<PtsDts>,
     /// (1b) + 42b?
     pub escr: Option<u64>,
     /// (1b) + 22b?
@@ -78,45 +112,54 @@ impl PesHeader {
         let data_alignment_indicator = raw.bit(5);
         let copyright = raw.bit(6);
         let original_or_copy = raw.bit(7).into();
-
+        let flags = raw[1];
         let pes_header_data_length = raw[2];
 
-        let mut bit_offset: usize = 24;
+        let mut offset: usize = 3;
 
-        let pts_dts = raw[1]
-            .bit(0)
-            .then(|| from_bits::<u64>(raw, bit_offset, 33))
-            .inspect(|_| bit_offset += 33);
+        let pts_dts = flags
+            .bit(1)
+            .then(|| {
+                if flags.bit(0) {
+                    PtsDts::pts(&raw[offset..])
+                } else {
+                    PtsDts::pts_dts(&raw[offset..])
+                }
+            })
+            .inspect(|x| match x {
+                PtsDts::Pts { .. } => offset += 5,
+                PtsDts::PtsDts { .. } => offset += 10,
+            });
 
         let escr = raw[1]
-            .bit(1)
-            .then(|| from_bits::<u64>(raw, bit_offset, 42))
-            .inspect(|_| bit_offset += 42);
+            .bit(2)
+            .then(|| {
+                let mut res = 0;
+                res |= raw[offset..].bits::<u64>(4, 3);
+                res |= raw[offset..].bits::<u64>(8, 15);
+                res |= raw[offset..].bits::<u64>(16, 15);
+                res
+            })
+            .inspect(|_| offset += 6);
 
         let es_rate = raw[1]
-            .bit(2)
-            .then(|| from_bits::<u32>(raw, bit_offset, 22))
-            .inspect(|_| bit_offset += 22);
-
-        let dsm_trick_mode = raw[1]
             .bit(3)
-            .then(|| from_bits::<u8>(raw, bit_offset, 8))
-            .inspect(|_| bit_offset += 8);
+            .then(|| raw[offset..].bits::<u32>(1, 22))
+            .inspect(|_| offset += 3);
 
-        let additional_copy_info = raw[1]
-            .bit(4)
-            .then(|| from_bits::<u8>(raw, bit_offset, 7))
-            .inspect(|_| bit_offset += 7);
+        let dsm_trick_mode = raw[1].bit(4).then(|| raw[offset]).inspect(|_| offset += 1);
+
+        let additional_copy_info = raw[1].bit(5).then(|| raw[offset]).inspect(|_| offset += 1);
 
         let previous_pes_crc = raw[1]
-            .bit(5)
-            .then(|| from_bits::<u16>(raw, bit_offset, 16))
-            .inspect(|_| bit_offset += 16);
+            .bit(6)
+            .then(|| raw[offset..].bits::<u16>(0, 16))
+            .inspect(|_| offset += 2);
 
-        // let pes_extension = raw[1]
-        //     .bit(6)
-        //     .then(|| PesExtension::from_raw(&raw[bit_offset..]))
-        //     .transpose()?;
+        let pes_extension = raw[1]
+            .bit(7)
+            .then(|| PesExtension::from_raw(&raw[offset..]))
+            .transpose()?;
 
         Ok(Self {
             pes_scrambling_control,
@@ -137,14 +180,19 @@ impl PesHeader {
 
     /// Bytes
     pub fn size(&self) -> usize {
-        let mut size = 2;
+        let mut size = 3;
 
-        self.pts_dts.inspect(|_| size += 33);
-        self.escr.inspect(|_| size += 42);
-        self.es_rate.inspect(|_| size += 22);
-        self.dsm_trick_mode.inspect(|_| size += 8);
-        self.additional_copy_info.inspect(|_| size += 7);
-        self.previous_pes_crc.inspect(|_| size += 16);
+        size += match self.pts_dts {
+            Some(PtsDts::Pts { .. }) => 5,
+            Some(PtsDts::PtsDts { .. }) => 10,
+            None => 0,
+        };
+
+        self.escr.inspect(|_| size += 48);
+        self.es_rate.inspect(|_| size += 24);
+        self.dsm_trick_mode.inspect(|_| size += 1);
+        self.additional_copy_info.inspect(|_| size += 1);
+        self.previous_pes_crc.inspect(|_| size += 2);
         self.pes_extension.as_ref().inspect(|p| size += p.size());
 
         size

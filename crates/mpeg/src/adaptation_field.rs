@@ -1,5 +1,7 @@
 use bit::{Bit, Bits, from_bits};
 
+use crate::adaptation_field_extension::AdaptationFieldExtension;
+
 #[derive(Debug)]
 pub struct AdaptationFieldContent {}
 
@@ -14,16 +16,16 @@ pub struct AdaptationField {
     pub random_access_indicator: bool,
     /// 1b
     pub elementary_stream_priority_indicator: bool,
-    /// 1b + 42b?
+    /// 1b + 48b?
     pub pcr: Option<u64>,
-    /// 1b + 42b?
+    /// 1b + 48b?
     pub opcr: Option<u64>,
     /// 1b + 8b?
     pub splice_countdown: Option<u8>,
-    /// 1b + n?
+    /// 1b + [1 + n]?
     pub transport_private_data: Option<Vec<u8>>,
     /// 1b + n?
-    pub adaptation_field_extension_length: Option<u8>,
+    pub adaptation_field_extension: Option<AdaptationFieldExtension>,
 }
 
 impl AdaptationField {
@@ -35,35 +37,26 @@ impl AdaptationField {
         let elementary_stream_priority_indicator = raw[1].bit(3);
         let flags = raw[1] & 0b0001_1111;
 
-        let mut bit_offset: usize = 48;
+        let mut offset: usize = 48;
 
-        let pcr = flags
-            .bit(3)
-            .then(|| raw.bits::<u64>(bit_offset, 42))
-            .inspect(|_| bit_offset += 42);
+        let pcr = flags.bit(3).then(|| 0).inspect(|_| offset += 6);
 
-        let opcr = flags
-            .bit(4)
-            .then(|| raw.bits::<u64>(bit_offset, 42))
-            .inspect(|_| bit_offset += 42);
+        let opcr = flags.bit(4).then(|| 0).inspect(|_| offset += 6);
 
-        let splice_countdown = flags
-            .bit(5)
-            .then(|| from_bits::<u8>(raw, bit_offset, 8))
-            .inspect(|_| bit_offset += 8);
+        let splice_countdown = flags.bit(5).then(|| raw[offset]).inspect(|_| offset += 1);
 
         let transport_private_data = flags.bit(6).then(|| {
-            let len = from_bits::<u8>(raw, bit_offset, 8);
-            bit_offset += 8;
-            tracing::warn!("Not implemented yet");
-            bit_offset += usize::from(len);
-            Vec::new()
+            let len = raw[offset] as usize;
+            offset += 1;
+            let data = Vec::from(&raw[offset..(offset + len)]);
+            offset += len;
+            data
         });
 
-        let adaptation_field_extension_length = flags.bit(7).then(|| {
-            tracing::warn!("Not implemented yet");
-            0
-        });
+        let adaptation_field_extension = flags
+            .bit(7)
+            .then(|| AdaptationFieldExtension::from_raw(&raw[offset..]))
+            .transpose()?;
 
         Ok(Self {
             adaptation_field_length,
@@ -74,7 +67,7 @@ impl AdaptationField {
             opcr,
             splice_countdown,
             transport_private_data,
-            adaptation_field_extension_length,
+            adaptation_field_extension,
         })
     }
 

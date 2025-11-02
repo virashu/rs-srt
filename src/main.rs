@@ -11,9 +11,7 @@ fn run_hls() -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter("rs_srt=info,mpeg=off")
-        .init();
+    tracing_subscriber::fmt().with_env_filter("info").init();
 
     let mut srt_server = SrtServer::new()?;
 
@@ -36,6 +34,8 @@ fn main() -> anyhow::Result<()> {
 
         let pack = MpegPacket::from_raw(mpeg_packet).unwrap();
 
+        tracing::info!("{pack:#?}");
+
         // match pack.header.packet_id {
         //     0x000 => tracing::info!("PAT"),
         //     0x100 => tracing::info!("Video"),
@@ -43,17 +43,17 @@ fn main() -> anyhow::Result<()> {
         //     n => tracing::info!("0x{n:X}"),
         // }
 
-        if let Some(Payload::Pes(pack)) = pack.payload {
-            if let PesPacket {
-                pes_header: Some(header),
-                ..
-            } = pack
-            {
-                tracing::info!("{:#x?}", header);
-            } else {
-                tracing::info!("PES witout header");
-            }
-        }
+        // if let Some(Payload::Pes(pack)) = pack.payload {
+        //     if let PesPacket {
+        //         pes_header: Some(header),
+        //         ..
+        //     } = pack
+        //     {
+        //         tracing::info!("{:#x?}", header);
+        //     } else {
+        //         tracing::info!("PES witout header");
+        //     }
+        // }
     });
 
     tracing::info!("Starting SRT");
