@@ -25,6 +25,15 @@ pub mod stream_ids {
     ];
 }
 
+pub mod steam_types {
+    pub const ISO_13818_7_AUDIO: u8 = 0x0F;
+    pub const ISO_14496_10_VIDEO: u8 = 0x1B;
+}
+
+pub mod descriptor_tags {
+    pub const MPEG4_VIDEO_DESCRIPTOR: u8 = 27;
+}
+
 pub mod packet_ids {
     pub const PROGRAM_ASSOCIATION_TABLE: u16 = 0x0000;
     pub const CONDITIONAL_ACCESS_TABLE: u16 = 0x0001;

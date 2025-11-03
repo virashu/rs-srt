@@ -48,13 +48,12 @@ impl ProgramAssociationSection {
             programs.push(program);
         }
 
-        let crc_32 = raw[(section_length as usize - 1)..].bits::<u32>(0, 32);
-
         // Check CRC
-        let checksum = CRC.checksum(&raw[0..(section_length as usize - 1)]);
-        if checksum != crc_32 {
+        let chksum_provided = raw[(section_length as usize - 1)..].bits::<u32>(0, 32);
+        let chksum_calculated = CRC.checksum(&raw[0..(section_length as usize - 1)]);
+        if chksum_calculated != chksum_provided {
             return Err(anyhow::anyhow!(
-                "Checksum does not match: {checksum} != {crc_32}"
+                "Checksum does not match: {chksum_calculated} != {chksum_provided}"
             ));
         }
 
@@ -68,7 +67,7 @@ impl ProgramAssociationSection {
             section_number,
             last_section_number,
             programs,
-            crc_32,
+            crc_32: chksum_provided,
         })
     }
 }

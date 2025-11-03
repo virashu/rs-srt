@@ -1,5 +1,33 @@
 use bit::{Bit, Bits};
 
+use crate::descriptor::{Descriptor, mpeg4_video::Mpeg4VideoDescriptor};
+
+#[derive(Debug)]
+pub struct ProgramDefinition {
+    pub stream_type: u8,
+    pub elementary_pid: u16,
+    pub es_info_length: u16,
+
+    pub descriptors: Vec<Descriptor>,
+}
+
+impl ProgramDefinition {
+    pub fn from_raw(raw: &[u8]) -> anyhow::Result<Self> {
+        let stream_type = raw[0];
+        let elementary_pid = u16::from_be_bytes(raw[1..3].try_into()?) & !(0b111 << 13);
+        let es_info_length = u16::from_be_bytes(raw[3..5].try_into()?) & !(0b1111 << 12);
+
+        let mut descriptors = Vec::new();
+
+        Ok(Self {
+            stream_type,
+            elementary_pid,
+            es_info_length,
+            descriptors,
+        })
+    }
+}
+
 #[derive(Debug)]
 pub struct TsProgramMapSection {
     pub table_id: u8,
@@ -13,6 +41,9 @@ pub struct TsProgramMapSection {
 
     pub pcr_pid: u16,
     pub program_info_length: u16,
+
+    pub program_info: Vec<Mpeg4VideoDescriptor>,
+    pub program_definitions: Vec<ProgramDefinition>,
 
     pub crc_32: u32,
 }
@@ -31,15 +62,32 @@ impl TsProgramMapSection {
         let last_section_number = raw[7];
 
         let pcr_pid = u16::from_be_bytes(raw[8..10].try_into()?) & !(0b111 << 13);
-        let program_info_length = u16::from_be_bytes(raw[10..12].try_into()?) & !(0b1111 << 12);
 
-        let crc_32 = raw[(section_length as usize - 1)..].bits::<u32>(0, 32);
+        // Program info (descriptors)
+        let program_info_length = u16::from_be_bytes(raw[10..12].try_into()?) & !(0b1111 << 12);
+        let descriptors_count = program_info_length / 3;
+        let mut program_info = Vec::new();
+        for i in 0..descriptors_count {
+            let offset = 12 + (i * 3) as usize;
+            let program = Mpeg4VideoDescriptor::from_raw(&raw[offset..])?;
+            program_info.push(program);
+        }
+
+        let mut offset = 12 + program_info_length as usize;
+
+        let mut program_definitions = Vec::new();
+        while offset < (section_length as usize - 1) {
+            let def = ProgramDefinition::from_raw(&raw[offset..(section_length as usize - 1)])?;
+            offset += def.es_info_length as usize + 5;
+            program_definitions.push(def);
+        }
 
         // Check CRC
-        let checksum = CRC.checksum(&raw[0..(section_length as usize - 1)]);
-        if checksum != crc_32 {
+        let chksum_provided = raw[(section_length as usize - 1)..].bits::<u32>(0, 32);
+        let chksum_calculated = CRC.checksum(&raw[0..(section_length as usize - 1)]);
+        if chksum_calculated != chksum_provided {
             return Err(anyhow::anyhow!(
-                "Checksum does not match: {checksum} != {crc_32}"
+                "Checksum does not match: {chksum_calculated} != {chksum_provided}"
             ));
         }
 
@@ -54,7 +102,9 @@ impl TsProgramMapSection {
             last_section_number,
             pcr_pid,
             program_info_length,
-            crc_32,
+            program_info,
+            program_definitions,
+            crc_32: chksum_provided,
         })
     }
 }
