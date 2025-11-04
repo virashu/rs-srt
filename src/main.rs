@@ -11,14 +11,17 @@ use std::{
 };
 
 use mpeg::{
+    constants::PACKET_SIZE as MPEG_PACKET_SIZE,
     psi::packet::{ProgramSpecificInformation, Section},
     transport::packet::{Payload, TransportPacket as MpegPacket},
 };
 use srt::server::Server as SrtServer;
 
-const SECONDS_PER_SEGMENT: u64 = 2;
-
-fn run_srt(current_segment: Arc<AtomicU64>, is_ended: Arc<AtomicBool>) -> anyhow::Result<()> {
+fn run_srt(
+    segment_size: u64,
+    current_segment: Arc<AtomicU64>,
+    is_ended: Arc<AtomicBool>,
+) -> anyhow::Result<()> {
     let timer = Rc::new(RefCell::new(0u64));
     let current_segment_data = Rc::new(RefCell::new(Vec::<u8>::new()));
 
@@ -27,7 +30,6 @@ fn run_srt(current_segment: Arc<AtomicU64>, is_ended: Arc<AtomicBool>) -> anyhow
     srt_server.on_connect(|conn| {
         let id = conn.stream_id.clone().unwrap_or_default();
         tracing::info!("Stream started: {id:?}");
-        fs::write(format!("_local/stream_{id}.mpg"), []).unwrap();
     });
 
     srt_server.on_disconnect(move |conn| {
@@ -37,7 +39,7 @@ fn run_srt(current_segment: Arc<AtomicU64>, is_ended: Arc<AtomicBool>) -> anyhow
     });
 
     srt_server.on_data(move |_, mpeg_data| {
-        for chunk in mpeg_data.chunks_exact(188) {
+        for chunk in mpeg_data.chunks_exact(MPEG_PACKET_SIZE) {
             let pack = MpegPacket::from_raw(chunk, &[]).unwrap();
 
             // If packet is PAS
@@ -48,12 +50,13 @@ fn run_srt(current_segment: Arc<AtomicU64>, is_ended: Arc<AtomicBool>) -> anyhow
                     ..
                 }))
             ) {
-                let new_segment = *timer.borrow() / SECONDS_PER_SEGMENT;
+                let new_segment = *timer.borrow() / segment_size;
                 let old_segment = current_segment.swap(new_segment, Ordering::Relaxed);
 
                 // Flush
                 if old_segment != new_segment {
                     tracing::info!("segment-write {old_segment}");
+
                     fs::OpenOptions::new()
                         .create(true)
                         .append(true)
@@ -84,6 +87,8 @@ fn run_srt(current_segment: Arc<AtomicU64>, is_ended: Arc<AtomicBool>) -> anyhow
 }
 
 fn main() -> anyhow::Result<()> {
+    const SECONDS_PER_SEGMENT: u64 = 2;
+
     tracing_subscriber::fmt().with_env_filter("info").init();
 
     _ = fs::remove_dir_all("_local");
@@ -98,7 +103,7 @@ fn main() -> anyhow::Result<()> {
         let current_segment = current_segment.clone();
         let is_ended = is_ended.clone();
 
-        || run_srt(current_segment, is_ended).unwrap()
+        || run_srt(SECONDS_PER_SEGMENT, current_segment, is_ended).unwrap()
     });
 
     tracing::info!("Starting HLS");

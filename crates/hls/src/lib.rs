@@ -19,10 +19,7 @@ use axum::{
     routing::get,
 };
 
-const PLAYLIST_HEADER_EVENT: &str = "#EXTM3U
-#EXT-X-VERSION:3
-#EXT-X-PLAYLIST-TYPE:EVENT
-";
+const PLAYLIST_HEADER_EVENT: &str = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-PLAYLIST-TYPE:EVENT\n";
 
 fn read_playlist(segment_size: u64, _current_segment: u64, is_ended: bool) -> String {
     let mut res = String::from(PLAYLIST_HEADER_EVENT);

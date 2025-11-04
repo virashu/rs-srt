@@ -67,12 +67,11 @@ impl Server {
                 );
 
                 if conn.check_ack() {
-                    conn.send(
-                        &self.socket,
-                        PacketContent::Control(ControlPacketInfo::Ack(Ack::Light {
-                            last_ackd_packet_sequence_number: data.packet_sequence_number + 1,
-                        })),
-                    )?;
+                    let ack = PacketContent::Control(ControlPacketInfo::Ack(Ack::Light {
+                        last_ackd_packet_sequence_number: data.packet_sequence_number + 1,
+                    }));
+                    tracing::trace!("srt | outbound | control | {ack:?}");
+                    conn.send(&self.socket, ack)?;
                 }
 
                 let mpeg_packet = &data.content[..];
