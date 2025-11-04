@@ -16,27 +16,12 @@ use axum::{
     routing::get,
 };
 
-const PLAYLIST_HEADER_VOD: &str = "#EXTM3U
-#EXT-X-VERSION:3
-#EXT-X-PLAYLIST-TYPE:VOD
-#EXT-X-TARGETDURATION:2
-#EXT-X-MEDIA-SEQUENCE:0
-
-";
-
 const PLAYLIST_HEADER_EVENT: &str = "#EXTM3U
 #EXT-X-VERSION:3
 #EXT-X-PLAYLIST-TYPE:EVENT
 ";
 
-fn mock_playlist(n_segments: u32) -> String {
-    let segments: String = (0..n_segments)
-        .map(|n| format!("#EXTINF:2.000,\n/api/hls/segment/segment_{n}.mpg\n"))
-        .collect();
-    format!("{PLAYLIST_HEADER_VOD}{segments}\n#EXT-X-ENDLIST")
-}
-
-fn read_playlist(segment_size: u64, current_segment: u64, is_ended: bool) -> String {
+fn read_playlist(segment_size: u64, _current_segment: u64, is_ended: bool) -> String {
     let mut res = String::from(PLAYLIST_HEADER_EVENT);
 
     let mut ents: Vec<_> = fs::read_dir("_local")
