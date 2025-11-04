@@ -29,7 +29,7 @@ pub struct TransportPacket {
 }
 
 impl TransportPacket {
-    pub fn from_raw(raw: &[u8], dyn_packet_ids: &[u16]) -> anyhow::Result<Self> {
+    pub fn from_raw(raw: &[u8], pmt_packet_ids: &[u16]) -> anyhow::Result<Self> {
         let header = Header::from_raw(raw)?;
 
         let adaptation_field = if header.adaptation_field_control & 0b10 == 0 {
@@ -53,7 +53,7 @@ impl TransportPacket {
             if header.payload_unit_start_indicator {
                 // Contains PES or PSI
                 if GROUP_CONTROL.contains(&header.packet_id)
-                    || dyn_packet_ids.contains(&header.packet_id)
+                    || pmt_packet_ids.contains(&header.packet_id)
                 {
                     Some(Payload::PSI(ProgramSpecificInformation::from_raw(
                         payload_body,

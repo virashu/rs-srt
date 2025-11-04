@@ -44,7 +44,7 @@ pub enum PtsDts {
 }
 
 impl PtsDts {
-    pub fn pts(raw: &[u8]) -> Self {
+    pub fn pts_from_raw(raw: &[u8]) -> Self {
         let mut pts = 0;
 
         pts |= raw.bits::<u64>(4, 3) << 29;
@@ -54,7 +54,7 @@ impl PtsDts {
         Self::Pts { pts }
     }
 
-    pub fn pts_dts(raw: &[u8]) -> Self {
+    pub fn pts_dts_from_raw(raw: &[u8]) -> Self {
         let mut pts = 0;
 
         pts |= raw.bits::<u64>(4, 3) << 29;
@@ -68,6 +68,12 @@ impl PtsDts {
         dts |= raw.bits::<u64>(66, 15);
 
         Self::PtsDts { pts, dts }
+    }
+
+    pub fn pts(&self) -> u64 {
+        match self {
+            PtsDts::Pts { pts } | PtsDts::PtsDts { pts, .. } => *pts,
+        }
     }
 }
 
@@ -121,9 +127,9 @@ impl PesHeader {
             .bit(1)
             .then(|| {
                 if flags.bit(0) {
-                    PtsDts::pts(&raw[offset..])
+                    PtsDts::pts_from_raw(&raw[offset..])
                 } else {
-                    PtsDts::pts_dts(&raw[offset..])
+                    PtsDts::pts_dts_from_raw(&raw[offset..])
                 }
             })
             .inspect(|x| match x {
