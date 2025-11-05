@@ -4,4 +4,4 @@ vars:
   SRT_ADDR: 127.0.0.1:9000
 
 tasks:
-  ffmpeg: ffmpeg -re -stream_loop -1 -i test.mp4 -f mpegts srt://{{ .SRT_ADDR }} -c:v libx264
+  ffmpeg: ffmpeg -re -stream_loop -1 -i tests/resources/test.mp4 -f mpegts srt://{{ .SRT_ADDR }} -c:v libx264
