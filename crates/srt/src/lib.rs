@@ -4,6 +4,7 @@
 #![forbid(clippy::print_stdout)]
 
 pub mod connection;
+pub mod constants;
 pub mod macros;
 pub mod ops;
 pub mod packet;

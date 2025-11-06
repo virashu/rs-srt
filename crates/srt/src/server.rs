@@ -3,30 +3,29 @@ use std::{
     net::{SocketAddr, ToSocketAddrs, UdpSocket},
 };
 
+use anyhow::Result;
+
 use crate::{
     connection::Connection,
-    ops::handshake_v5,
-    packet::{
-        Packet, PacketContent,
-        control::{ControlPacketInfo, ack::Ack},
-    },
+    packet::{Packet, PacketContent, control::ControlPacketInfo},
 };
 
 const MAX_PACK_SIZE: usize = 1500;
 
 type OnConnectHandler = dyn Fn(&Connection);
 type OnDiscnnectHandler = dyn Fn(&Connection);
-type OnDataHandler = dyn Fn(&Connection, &[u8]);
+pub type OnDataHandler = dyn Fn(&Connection, &[u8]);
 
-pub struct Server {
+pub struct Server<'c> {
     socket: UdpSocket,
-    connections: HashMap<SocketAddr, Connection>,
+    connections: HashMap<SocketAddr, Connection<'c>>,
+
     on_connect: Option<Box<OnConnectHandler>>,
     on_disconnect: Option<Box<OnDiscnnectHandler>>,
     on_data: Option<Box<OnDataHandler>>,
 }
 
-impl Server {
+impl<'c> Server<'c> {
     pub fn new<A>(addr: A) -> anyhow::Result<Self>
     where
         A: ToSocketAddrs,
@@ -54,51 +53,6 @@ impl Server {
         self.on_data = Some(Box::new(f));
     }
 
-    fn handle(&self, conn: &Connection, pack: &Packet) -> anyhow::Result<()> {
-        match &pack.content {
-            PacketContent::Control(control) => {
-                tracing::trace!("srt | inbound | control | {control:?}");
-
-                match control {
-                    ControlPacketInfo::KeepAlive => {
-                        let keep_alive = PacketContent::Control(ControlPacketInfo::KeepAlive);
-                        tracing::trace!("srt | outbound | control | {keep_alive:?}");
-                        conn.send(&self.socket, keep_alive)?;
-                    }
-                    _ => {}
-                }
-            }
-            PacketContent::Data(data) => {
-                tracing::trace!(
-                    "srt | inbound | data | Data {{ packet_sequence_number: {:?}, position: {:?}, order: {:?}, encryption: {:?}, retransmitted: {:?}, message_number: {:?}, length: {:?} }}",
-                    data.packet_sequence_number,
-                    data.position,
-                    data.order,
-                    data.encryption,
-                    data.retransmitted,
-                    data.message_number,
-                    data.content.len()
-                );
-
-                if conn.check_ack() {
-                    let ack = PacketContent::Control(ControlPacketInfo::Ack(Ack::Light {
-                        last_ackd_packet_sequence_number: data.packet_sequence_number + 1,
-                    }));
-                    tracing::trace!("srt | outbound | control | {ack:?}");
-                    conn.send(&self.socket, ack)?;
-                }
-
-                let mpeg_packet = &data.content[..];
-
-                if let Some(callback) = &self.on_data {
-                    callback(conn, mpeg_packet);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     fn recv(&self) -> anyhow::Result<(SocketAddr, Packet)> {
         let mut buf = [0; MAX_PACK_SIZE];
 
@@ -109,7 +63,7 @@ impl Server {
         Ok((addr, pack))
     }
 
-    pub fn run(&mut self) -> anyhow::Result<()> {
+    pub fn run(&'c mut self) -> anyhow::Result<()> {
         loop {
             let (addr, pack) = self.recv()?;
 
@@ -127,9 +81,11 @@ impl Server {
                     continue;
                 }
 
-                self.handle(conn, &pack)?;
+                conn.handle(&pack)?;
             } else {
-                let Ok(conn) = handshake_v5(&self.socket) else {
+                let Ok(conn): Result<Connection<'c>> =
+                    Connection::establish_v5(&self.socket, self.on_data.as_deref())
+                else {
                     continue;
                 };
                 if let Some(callback) = &self.on_connect {

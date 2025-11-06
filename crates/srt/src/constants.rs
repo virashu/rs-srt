@@ -1,0 +1,1 @@
+pub const HANDSHAKE_MAGIC_CODE: u16 = 0x4A17;
