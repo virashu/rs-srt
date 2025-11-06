@@ -4,13 +4,13 @@ use std::{
         Mutex,
         atomic::{AtomicU32, Ordering},
     },
-    time::SystemTime,
+    time::{Instant, SystemTime},
 };
 
 use anyhow::Result;
 
 use crate::{
-    constants::HANDSHAKE_MAGIC_CODE,
+    constants::{FULL_ACK_INTERVAL, HANDSHAKE_MAGIC_CODE, RTT_INIT, RTT_VAR_INIT},
     packet::{
         Packet, PacketContent,
         control::{ControlPacketInfo, ack::Ack, handshake::Handshake, nak::Nak},
@@ -34,12 +34,13 @@ pub struct Connection<'c> {
     /// # of packets received since last ack was sent
     received_since_ack: AtomicU32,
 
-    last_ack_timestamp: Mutex<SystemTime>,
+    last_ack_timestamp: Mutex<Instant>,
 
     /// Package sequence number of last received data packet
     last_received: AtomicU32,
 
     rtt: AtomicU32,
+    rtt_var: AtomicU32,
 }
 
 impl<'c> Connection<'c> {
@@ -117,10 +118,11 @@ impl<'c> Connection<'c> {
             addr,
             peer_srt_socket_id,
             ack_counter: AtomicU32::new(1),
-            last_ack_timestamp: Mutex::new(SystemTime::UNIX_EPOCH),
+            last_ack_timestamp: Mutex::new(Instant::now()),
             received_since_ack: AtomicU32::default(),
             last_received: AtomicU32::default(),
-            rtt: AtomicU32::default(),
+            rtt: AtomicU32::new(RTT_INIT),
+            rtt_var: AtomicU32::new(RTT_VAR_INIT),
         })
     }
 
@@ -130,7 +132,7 @@ impl<'c> Connection<'c> {
 
     pub fn check_ack(&self) -> bool {
         self.received_since_ack
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| Some((x + 1) % 60))
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| Some((x + 1) % 64))
             == Ok(0)
     }
 
@@ -162,10 +164,25 @@ impl<'c> Connection<'c> {
                 self.send(keep_alive)?;
             }
             ControlPacketInfo::AckAck(_) => {
+                // Calculate RTT
+                // RTT = 7/8 * RTT + 1/8 * rtt
+                // RTTVar = 3/4 * RTTVar + 1/4 * abs(RTT - rtt)
+
                 let sent = self.last_ack_timestamp.lock().unwrap();
-                let delta = SystemTime::now().duration_since(*sent).unwrap();
-                self.rtt
-                    .store(delta.as_micros().try_into()?, Ordering::Relaxed);
+                let rtt_new: u32 = sent.elapsed().as_micros().try_into().unwrap();
+
+                let rtt_old = self
+                    .rtt
+                    .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| {
+                        Some(x * 7 / 8 + rtt_new / 8)
+                    })
+                    .unwrap();
+
+                self.rtt_var
+                    .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |rtt_var| {
+                        Some(rtt_var * 3 / 4 + (rtt_old).abs_diff(rtt_new) / 4)
+                    })
+                    .unwrap();
             }
             _ => (),
         }
@@ -195,31 +212,15 @@ impl<'c> Connection<'c> {
             data.content.len()
         );
 
-        if self.check_ack() {
-            let rtt = self.rtt.load(Ordering::Relaxed) + 1_000_000;
-            // let ack = PacketContent::Control(ControlPacketInfo::Ack(Ack::Full {
-            //     ack_number: self.inc_ack(),
-            //     last_ackd_packet_sequence_number: data.packet_sequence_number + 1,
-            //     rtt,
-            //     rtt_variance: 0,
-            //     available_buffer_size: 1,
-            //     packets_receiving_rate: 1,
-            //     estimated_link_capacity: 1,
-            //     receiving_rate: 1,
-            // }));
-            let ack = PacketContent::Control(ControlPacketInfo::Ack(Ack::Small {
-                last_ackd_packet_sequence_number: data.packet_sequence_number + 1,
-                rtt,
-                rtt_variance: 100,
-                available_buffer_size: 1,
-            }));
-            // let ack = PacketContent::Control(ControlPacketInfo::Ack(Ack::Light {
-            //     last_ackd_packet_sequence_number: data.packet_sequence_number + 1,
-            // }));
-            *self.last_ack_timestamp.lock().unwrap() = SystemTime::now();
-            tracing::trace!("srt | outbound | control | {ack:?}");
-            self.send(ack)?;
-        }
+        self.send_full_ack()?;
+
+        // if self.check_ack() {
+        //     let ack = PacketContent::Control(ControlPacketInfo::Ack(Ack::Light {
+        //         last_ackd_packet_sequence_number: data.packet_sequence_number + 1,
+        //     }));
+        //     tracing::trace!("srt | outbound | control | {ack:?}");
+        //     self.send(ack)?;
+        // }
 
         let mpeg_packet = &data.content[..];
 
@@ -231,9 +232,38 @@ impl<'c> Connection<'c> {
     }
 
     pub fn handle(&self, pack: &Packet) -> Result<()> {
+        self.update()?;
+
         match &pack.content {
             PacketContent::Control(control) => self.handle_control(control)?,
             PacketContent::Data(data) => self.handle_data(data)?,
+        }
+
+        Ok(())
+    }
+
+    fn send_full_ack(&self) -> Result<()> {
+        let ack = PacketContent::Control(ControlPacketInfo::Ack(Ack::Full {
+            ack_number: self.inc_ack(),
+            last_ackd_packet_sequence_number: self.last_received.load(Ordering::Relaxed) + 1,
+            rtt: self.rtt.load(Ordering::Relaxed),
+            rtt_variance: self.rtt_var.load(Ordering::Relaxed),
+            available_buffer_size: 1,
+            packets_receiving_rate: 1,
+            estimated_link_capacity: 1,
+            receiving_rate: 1,
+        }));
+        tracing::trace!("srt | outbound | control | {ack:?}");
+        self.send(ack)
+    }
+
+    pub fn update(&self) -> Result<()> {
+        let mut last_ack_timestamp = self.last_ack_timestamp.lock().unwrap();
+        let micros: u32 = last_ack_timestamp.elapsed().as_micros().try_into().unwrap();
+
+        if micros > FULL_ACK_INTERVAL {
+            *last_ack_timestamp = Instant::now();
+            self.send_full_ack()?;
         }
 
         Ok(())

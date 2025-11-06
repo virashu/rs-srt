@@ -20,7 +20,7 @@ pub mod control_types {
     pub const SHUTDOWN: u16 = 0x0005;
     pub const ACKACK: u16 = 0x0006;
     pub const DROPREQ: u16 = 0x0007;
-    pub const PEERERROR: u16 = 0x0008;
+    pub const PEER_ERROR: u16 = 0x0008;
     pub const OTHER: u16 = 0x7FFF;
 }
 
@@ -54,7 +54,7 @@ impl ControlPacketInfo {
             control_types::SHUTDOWN => Self::Shutdown,
             control_types::ACKACK => Self::AckAck(AckAck::from_raw(raw)?),
             control_types::DROPREQ => Self::DropReq(DropReq::from_raw(raw)?),
-            control_types::PEERERROR => todo!("PeerError"),
+            control_types::PEER_ERROR => todo!("PeerError"),
             control_types::OTHER => todo!("Other"),
 
             _ => unreachable!(),

@@ -7,10 +7,9 @@ use anyhow::Result;
 
 use crate::{
     connection::Connection,
+    constants::MAX_PACKET_SIZE,
     packet::{Packet, PacketContent, control::ControlPacketInfo},
 };
-
-const MAX_PACK_SIZE: usize = 1500;
 
 type OnConnectHandler = dyn Fn(&Connection);
 type OnDiscnnectHandler = dyn Fn(&Connection);
@@ -26,7 +25,7 @@ pub struct Server<'c> {
 }
 
 impl<'c> Server<'c> {
-    pub fn new<A>(addr: A) -> anyhow::Result<Self>
+    pub fn new<A>(addr: A) -> Result<Self>
     where
         A: ToSocketAddrs,
     {
@@ -53,8 +52,8 @@ impl<'c> Server<'c> {
         self.on_data = Some(Box::new(f));
     }
 
-    fn recv(&self) -> anyhow::Result<(SocketAddr, Packet)> {
-        let mut buf = [0; MAX_PACK_SIZE];
+    fn recv(&self) -> Result<(SocketAddr, Packet)> {
+        let mut buf = [0; MAX_PACKET_SIZE];
 
         let (n, addr) = self.socket.recv_from(&mut buf)?;
         let data = &buf[..n];
@@ -63,28 +62,23 @@ impl<'c> Server<'c> {
         Ok((addr, pack))
     }
 
-    pub fn run(&'c mut self) -> anyhow::Result<()> {
+    pub fn run(&'c mut self) -> Result<()> {
         loop {
             let (addr, pack) = self.recv()?;
 
-            if let Some(conn) = self.connections.get(&addr) {
-                if matches!(
-                    pack.content,
-                    PacketContent::Control(ControlPacketInfo::Shutdown)
-                ) {
-                    if let Some(conn) = self.connections.remove(&addr)
-                        && let Some(callback) = &self.on_disconnect
-                    {
-                        callback(&conn);
-                    }
-
-                    continue;
+            if matches!(
+                pack.content,
+                PacketContent::Control(ControlPacketInfo::Shutdown)
+            ) {
+                if let Some(conn) = self.connections.remove(&addr)
+                    && let Some(callback) = &self.on_disconnect
+                {
+                    callback(&conn);
                 }
-
+            } else if let Some(conn) = self.connections.get(&addr) {
                 conn.handle(&pack)?;
             } else {
-                let Ok(conn): Result<Connection<'c>> =
-                    Connection::establish_v5(&self.socket, self.on_data.as_deref())
+                let Ok(conn) = Connection::establish_v5(&self.socket, self.on_data.as_deref())
                 else {
                     continue;
                 };
