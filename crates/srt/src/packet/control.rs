@@ -53,7 +53,7 @@ impl ControlPacketInfo {
             control_types::CONGESTION_WARNING => todo!("CongestionWarning"),
             control_types::SHUTDOWN => Self::Shutdown,
             control_types::ACKACK => Self::AckAck(AckAck::from_raw(raw)?),
-            control_types::DROPREQ => todo!("DropReq"),
+            control_types::DROPREQ => Self::DropReq(DropReq::from_raw(raw)?),
             control_types::PEERERROR => todo!("PeerError"),
             control_types::OTHER => todo!("Other"),
 
@@ -90,7 +90,7 @@ impl ControlPacketInfo {
         match self {
             Self::Handshake(h) => h.raw_content(),
             Self::Ack(ack) => ack.raw_content(),
-            Self::Nak(_) => todo!(),
+            Self::Nak(nak) => nak.raw_content(),
             Self::DropReq(_) => todo!(),
             Self::Other => todo!(),
 
