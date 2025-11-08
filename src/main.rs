@@ -27,9 +27,13 @@ fn run_srt(
 
     let mut srt_server = SrtServer::new("0.0.0.0:9000")?;
 
-    srt_server.on_connect(|conn| {
-        let id = conn.stream_id.clone().unwrap_or_default();
-        tracing::info!("Stream started: {id:?}");
+    srt_server.on_connect({
+        let is_ended = is_ended.clone();
+        move |conn| {
+            let id = conn.stream_id.clone().unwrap_or_default();
+            tracing::info!("Stream started: {id:?}");
+            is_ended.store(false, Ordering::Relaxed);
+        }
     });
 
     srt_server.on_disconnect(move |conn| {
