@@ -1,23 +1,18 @@
 use anyhow::{Result, anyhow};
 use bit::Bit;
 
-/// 4B
+use crate::transport::adaptation_field_control::AdaptationFieldControl;
+
 #[derive(Debug)]
 pub struct Header {
-    // 8b sync byte
-    /// 1b
-    pub transport_error_indicator: bool,
-    /// 1b
-    pub payload_unit_start_indicator: bool,
-    /// 1b
+    pub pid: u16,
+
+    pub transport_error: bool,
+    pub payload_unit_start: bool,
     pub transport_priority: bool,
-    /// 13b
-    pub packet_id: u16,
-    /// 2b
+
     pub transport_scrambling_control: u8,
-    /// 2b
-    pub adaptation_field_control: u8,
-    /// 4b
+    pub adaptation_field_control: AdaptationFieldControl,
     pub continuity_counter: u8,
 }
 
@@ -29,6 +24,7 @@ impl Header {
             return Err(anyhow!("Missing sync byte: {raw:?}"));
         }
 
+        // Raw numbers
         let transport_error_indicator = raw[1].bit(0);
         let payload_unit_start_indicator = raw[1].bit(1);
         let transport_priority = raw[1].bit(2);
@@ -38,17 +34,19 @@ impl Header {
         let continuity_counter = raw[3] & 0b0000_1111;
 
         Ok(Self {
-            transport_error_indicator,
-            payload_unit_start_indicator,
+            pid: packet_id,
+
+            transport_error: transport_error_indicator,
+            payload_unit_start: payload_unit_start_indicator,
             transport_priority,
-            packet_id,
+
             transport_scrambling_control,
-            adaptation_field_control,
+            adaptation_field_control: AdaptationFieldControl::from_raw(adaptation_field_control)?,
             continuity_counter,
         })
     }
 
     pub const fn size(&self) -> usize {
-        32
+        4
     }
 }

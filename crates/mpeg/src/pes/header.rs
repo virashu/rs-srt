@@ -4,15 +4,10 @@ use bit::{Bit, Bits};
 #[derive(Clone, Debug)]
 pub struct PesExtension {
     // Optional fields
-    /// 128b?
     pub pes_private_data: Option<u128>,
-    /// 8b?
     pub pack_header_field: Option<u8>,
-    /// 8b?
     pub program_packet_seq_cntr: Option<u8>,
-    /// 16b?
     pub pstd_buffer: Option<u16>,
-    /// n?
     pub pes_extension_field_data: Option<Vec<u8>>,
 }
 
@@ -82,39 +77,26 @@ impl PtsDts {
 
 #[derive(Debug)]
 pub struct PesHeader {
-    // 2b const
-    /// 2b
     pub pes_scrambling_control: u8,
-    /// 1b
     pub pes_priority: bool,
-    /// 1b
     pub data_alignment_indicator: bool,
-    /// 1b
     pub copyright: bool,
-    /// 1b
     pub original_or_copy: OriginalOrCopy,
-    // (8b flags)
-    /// 8b
     pub pes_header_data_length: u8,
 
     // Optional fields
-    /// (2b) + {0,40,80}b
     pub pts_dts: Option<PtsDts>,
-    /// (1b) + 42b?
     pub escr: Option<u64>,
-    /// (1b) + 22b?
     pub es_rate: Option<u32>,
-    /// (1b) + 8b?
     pub dsm_trick_mode: Option<u8>,
-    /// (1b) + 7b?
     pub additional_copy_info: Option<u8>,
-    /// (1b) + 16b?
     pub previous_pes_crc: Option<u16>,
-    /// (1b) + n?
     pub pes_extension: Option<PesExtension>,
 }
 
 impl PesHeader {
+    /// # Errors
+    /// Error while parsing raw bytes
     pub fn from_raw(raw: &[u8]) -> Result<Self> {
         let pes_scrambling_control = raw[0] & 0b0011_0000 >> 4;
         let pes_priority = raw.bit(4);
@@ -165,10 +147,10 @@ impl PesHeader {
             .then(|| raw[offset..].bits::<u16>(0, 16))
             .inspect(|_| offset += 2);
 
-        // let pes_extension = raw[1]
-        //     .bit(7)
-        //     .then(|| PesExtension::from_raw(&raw[offset..]))
-        //     .transpose()?;
+        let pes_extension = raw[1]
+            .bit(7)
+            .then(|| PesExtension::from_raw(&raw[offset..]))
+            .transpose()?;
 
         Ok(Self {
             pes_scrambling_control,
@@ -187,7 +169,7 @@ impl PesHeader {
         })
     }
 
-    /// Bytes
+    /// Get size of raw content in bytes
     pub fn size(&self) -> usize {
         let mut size = 3;
 
@@ -197,8 +179,8 @@ impl PesHeader {
             None => 0,
         };
 
-        self.escr.inspect(|_| size += 48);
-        self.es_rate.inspect(|_| size += 24);
+        self.escr.inspect(|_| size += 6);
+        self.es_rate.inspect(|_| size += 3);
         self.dsm_trick_mode.inspect(|_| size += 1);
         self.additional_copy_info.inspect(|_| size += 1);
         self.previous_pes_crc.inspect(|_| size += 2);

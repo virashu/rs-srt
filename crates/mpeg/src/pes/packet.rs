@@ -2,17 +2,11 @@ use anyhow::Result;
 
 use crate::{constants::stream_ids::GROUP_NO_HEADER, pes::header::PesHeader};
 
-/// 3B+
 #[derive(Debug)]
 pub struct PesPacket {
-    // 24b prefix
-    /// 8b
     pub stream_id: u8,
-    /// 16b
-    pub pes_packet_length: u16,
-    /// n?
+    pes_packet_length: u16,
     pub pes_header: Option<PesHeader>,
-    /// n
     pub pes_data: Vec<u8>,
 }
 

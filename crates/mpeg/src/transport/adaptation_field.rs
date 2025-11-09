@@ -6,26 +6,19 @@ use crate::transport::adaptation_field_extension::AdaptationFieldExtension;
 #[derive(Debug)]
 pub struct AdaptationFieldContent {}
 
-/// 8-16b+
 #[derive(Debug)]
 pub struct AdaptationField {
-    /// 8b
-    pub adaptation_field_length: u8,
-    /// 1b
+    length: u8,
+
     pub discontinuity_indicator: bool,
-    /// 1b
     pub random_access_indicator: bool,
-    /// 1b
     pub elementary_stream_priority_indicator: bool,
-    /// 1b + 48b?
+
+    // Optional fields
     pub pcr: Option<u64>,
-    /// 1b + 48b?
     pub opcr: Option<u64>,
-    /// 1b + 8b?
     pub splice_countdown: Option<u8>,
-    /// 1b + [1 + n]?
     pub transport_private_data: Option<Vec<u8>>,
-    /// 1b + n?
     pub adaptation_field_extension: Option<AdaptationFieldExtension>,
 }
 
@@ -33,7 +26,7 @@ impl AdaptationField {
     /// # Errors
     /// Error while parsing raw bytes
     pub fn from_raw(raw: &[u8]) -> Result<Self> {
-        let adaptation_field_length = raw[0];
+        let length = raw[0];
 
         let discontinuity_indicator = raw[1].bit(0);
         let random_access_indicator = raw[1].bit(1);
@@ -76,7 +69,7 @@ impl AdaptationField {
             .transpose()?;
 
         Ok(Self {
-            adaptation_field_length,
+            length,
             discontinuity_indicator,
             random_access_indicator,
             elementary_stream_priority_indicator,
@@ -89,6 +82,6 @@ impl AdaptationField {
     }
 
     pub fn size(&self) -> usize {
-        self.adaptation_field_length as usize + 1
+        self.length as usize + 1
     }
 }

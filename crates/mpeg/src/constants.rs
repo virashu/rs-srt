@@ -55,14 +55,8 @@ pub mod table_ids {
     pub const CONDITIONAL_ACCESS_SECTION: u8 = 0x01;
     pub const TS_PROGRAM_MAP_SECTION: u8 = 0x02;
     pub const TS_DESCRIPTION_SECTION: u8 = 0x03;
-    pub const SCENE_DESCRIPTION: u8 = 0x04;
-    pub const OBJECT_DESCRIPTION: u8 = 0x05;
-
-    // 0x04 ISO_IEC_14496_scene_description_section
-    // 0x05 ISO_IEC_14496_object_descriptor_section
-    // 0x06 Metadata_section
-    // 0x07 IPMP_Control_Information_section (defined in ISO/IEC 13818-11)
-    // 0x08-0x3F ITU-T Rec. H.222.0 | ISO/IEC 13818-1 reserved
-    // 0x40-0xFE User private
-    // 0xFF Forbidden
+    pub const ISO_14496_SCENE_DESCRIPTION_SECTION: u8 = 0x04;
+    pub const ISO_14496_OBJECT_DESCRIPTION_SECTION: u8 = 0x05;
+    pub const METADATA_SECTION: u8 = 0x06;
+    pub const IPMP_CONTROL_INFORMATION_SECTION: u8 = 0x07;
 }

@@ -53,7 +53,7 @@ fn main() -> anyhow::Result<()> {
                 segment.replace(*segment_s.borrow());
             }
 
-            if pack.header.packet_id == 0x100
+            if pack.header.pid == 0x100
                 && let Some(Payload::PES(pes)) = pack.payload
             {
                 let seconds = pes.pes_header.unwrap().pts_dts.unwrap().pts() / 90_000;

@@ -1,37 +1,25 @@
 use anyhow::Result;
 use bit::{Bit, Bits};
 
-/// 2B
 #[derive(Debug)]
 pub struct AdaptationFieldExtensionLtw {
-    /// 1b
-    pub ltw_valid_flag: bool,
-    /// 15b
-    pub ltw_offset: u16,
+    pub valid_flag: bool,
+    pub offset: u16,
 }
 
-/// 5B
 #[derive(Debug)]
 pub struct AdaptationFieldExtensionSeamlessSplice {
-    // 3b (reserved)
-    /// 4b
     pub splice_type: u8,
-    /// 33b
     pub dts_next_au: u64,
 }
 
-/// 2-12B+
 #[derive(Debug)]
 pub struct AdaptationFieldExtension {
-    /// 1B
-    pub adaptation_field_extension_length: u8,
-    // 5b (flags)
+    length: u8,
+
     // Optional fields
-    /// (1b) + 2B?
     pub ltw: Option<AdaptationFieldExtensionLtw>,
-    /// (1b) + 3B?
     pub piecewise_rate: Option<u32>,
-    /// (1b) + 5B?
     pub splice_type: Option<AdaptationFieldExtensionSeamlessSplice>,
 }
 
@@ -39,7 +27,7 @@ impl AdaptationFieldExtension {
     /// # Errors
     /// Error while parsing raw bytes
     pub fn from_raw(raw: &[u8]) -> Result<Self> {
-        let adaptation_field_extension_length = raw[0];
+        let length = raw[0];
         let flags = raw[1];
 
         let mut offset = 2;
@@ -47,8 +35,8 @@ impl AdaptationFieldExtension {
         let ltw = flags
             .bit(0)
             .then(|| AdaptationFieldExtensionLtw {
-                ltw_valid_flag: raw[offset..].bit(0),
-                ltw_offset: raw[offset..].bits::<u16>(1, 15),
+                valid_flag: raw[offset..].bit(0),
+                offset: raw[offset..].bits::<u16>(1, 15),
             })
             .inspect(|_| offset += 2);
 
@@ -75,10 +63,14 @@ impl AdaptationFieldExtension {
             .inspect(|_| offset += 5);
 
         Ok(Self {
-            adaptation_field_extension_length,
+            length,
             ltw,
             piecewise_rate,
             splice_type,
         })
+    }
+
+    pub fn size(&self) -> usize {
+        self.length as usize + 1
     }
 }

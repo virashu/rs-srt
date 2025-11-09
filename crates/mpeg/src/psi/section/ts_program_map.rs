@@ -7,7 +7,7 @@ use crate::descriptor::{Descriptor, mpeg4_video::Mpeg4VideoDescriptor};
 pub struct ProgramDefinition {
     pub stream_type: u8,
     pub elementary_pid: u16,
-    pub es_info_length: u16,
+    es_info_length: u16,
 
     pub descriptors: Vec<Descriptor>,
 }
@@ -38,13 +38,17 @@ impl ProgramDefinition {
             descriptors,
         })
     }
+
+    pub fn size(&self) -> usize {
+        self.es_info_length as usize + 5
+    }
 }
 
 #[derive(Debug)]
 pub struct TsProgramMapSection {
     pub table_id: u8,
     pub section_syntax_indicator: bool,
-    pub section_length: u16,
+    section_length: u16,
     pub program_number: u16,
     pub version_number: u8,
     pub current_next_indicator: bool,
@@ -52,12 +56,11 @@ pub struct TsProgramMapSection {
     pub last_section_number: u8,
 
     pub pcr_pid: u16,
-    pub program_info_length: u16,
 
-    pub program_info: Vec<Mpeg4VideoDescriptor>,
+    pub program_info: Vec<Descriptor>,
     pub program_definitions: Vec<ProgramDefinition>,
 
-    pub crc_32: u32,
+    crc_32: u32,
 }
 
 impl TsProgramMapSection {
@@ -79,21 +82,20 @@ impl TsProgramMapSection {
 
         // Program info (descriptors)
         let program_info_length = u16::from_be_bytes(raw[10..12].try_into()?) & !(0b1111 << 12);
-        let descriptors_count = program_info_length / 3;
+        let mut offset = 12;
         let mut program_info = Vec::new();
-        for i in 0..descriptors_count {
-            let offset = 12 + (i * 3) as usize;
-            let program = Mpeg4VideoDescriptor::from_raw(&raw[offset..])?;
-            program_info.push(program);
+        while offset < (12 + program_info_length as usize) {
+            let desc = Descriptor::from_raw(&raw[offset..])?;
+            offset += desc.size();
+            program_info.push(desc);
         }
 
-        let mut offset = 12 + program_info_length as usize;
-
+        // Program definitions
         let mut program_definitions = Vec::new();
         while offset < (section_length as usize - 1) {
-            let def = ProgramDefinition::from_raw(&raw[offset..(section_length as usize - 1)])?;
-            offset += def.es_info_length as usize + 5;
-            program_definitions.push(def);
+            let p_d = ProgramDefinition::from_raw(&raw[offset..(section_length as usize - 1)])?;
+            offset += p_d.size();
+            program_definitions.push(p_d);
         }
 
         // Check CRC
@@ -115,7 +117,6 @@ impl TsProgramMapSection {
             section_number,
             last_section_number,
             pcr_pid,
-            program_info_length,
             program_info,
             program_definitions,
             crc_32: chksum_provided,

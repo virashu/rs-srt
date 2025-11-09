@@ -15,7 +15,8 @@ pub enum Section {
 
 #[derive(Debug)]
 pub struct ProgramSpecificInformation {
-    pub pointer: u8,
+    pointer: u8,
+
     pub section: Section,
 }
 

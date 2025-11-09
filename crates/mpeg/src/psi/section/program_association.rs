@@ -11,7 +11,7 @@ pub struct ProgramAssociation {
 pub struct ProgramAssociationSection {
     pub table_id: u8,
     pub section_syntax_indicator: bool,
-    pub section_length: u16,
+    section_length: u16,
     pub transport_stream_id: u16,
     pub version_number: u8,
     pub current_next_indicator: bool,
@@ -20,7 +20,7 @@ pub struct ProgramAssociationSection {
 
     pub programs: Vec<ProgramAssociation>,
 
-    pub crc_32: u32,
+    crc_32: u32,
 }
 
 impl ProgramAssociationSection {

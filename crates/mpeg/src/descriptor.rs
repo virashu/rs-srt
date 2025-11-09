@@ -12,9 +12,7 @@ pub mod private_data_indicator;
 
 #[derive(Debug)]
 pub enum Descriptor {
-    // 15
     PrivateDataIndicator(PrivateDataIndicatorDescriptor),
-    // 27
     Mpeg4Video(Mpeg4VideoDescriptor),
 }
 
@@ -35,8 +33,8 @@ impl Descriptor {
 
     pub fn size(&self) -> usize {
         match self {
-            Descriptor::PrivateDataIndicator(d) => d.descriptor_length as usize,
-            Descriptor::Mpeg4Video(d) => d.descriptor_length as usize,
+            Descriptor::PrivateDataIndicator(d) => d.size(),
+            Descriptor::Mpeg4Video(d) => d.size(),
         }
     }
 }
