@@ -13,8 +13,53 @@
     justify-content: center;
 }
 
-#video {
+.player {
+    position: relative;
+    isolation: isolate;
+    z-index: 1;
+
     width: 60vw;
     padding: 1rem;
+    height: max-content;
+
     background-color: red;
+
+    border-radius: 1.6rem;
+}
+
+@property --m {
+    syntax: "<percentage>";
+    inherits: false;
+    initial-value: 0%;
+}
+
+.player > #video {
+    width: 100%;
+
+    background: black
+        repeating-linear-gradient(
+            45deg,
+            #3f87a65a calc(var(--m) + 0%),
+            #ebf8e15a calc(var(--m) + 15%),
+            #f69d3c5a calc(var(--m) + 20%)
+        );
+
+    border-radius: 0.6rem;
+    animation: movebg 5s infinite linear;
+}
+
+@keyframes movebg {
+    from {
+        --m: 0%;
+    }
+    to {
+        --m: 100%;
+    }
+}
+
+.player > .controls {
+    position: absolute;
+    left: 1.6rem;
+    bottom: 1.6rem;
+    z-index: 2;
 }
