@@ -4,7 +4,7 @@ pub struct PrivateSection {
     pub private_indicator: bool,
     private_section_length: u16,
     pub transport_stream_id: u16,
-    pub verion_number: u8,
+    pub version_number: u8,
     pub current_next_indicator: bool,
     pub section_number: u8,
     pub last_section_number: u8,

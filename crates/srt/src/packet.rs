@@ -27,7 +27,7 @@ impl PacketContent {
         }
     }
 
-    pub fn raw_contnet(&self) -> Vec<u8> {
+    pub fn raw_content(&self) -> Vec<u8> {
         match self {
             Self::Control(p) => p.raw_content(),
             Self::Data(p) => p.raw_content(),
@@ -62,7 +62,7 @@ impl Packet {
         res.extend(self.content.raw_header());
         res.extend(self.timestamp.to_be_bytes());
         res.extend(self.dest_socket_id.to_be_bytes());
-        res.extend(self.content.raw_contnet());
+        res.extend(self.content.raw_content());
 
         res
     }
