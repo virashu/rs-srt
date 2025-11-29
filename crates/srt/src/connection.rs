@@ -29,17 +29,21 @@ pub struct Connection<'c> {
     pub addr: SocketAddr,
     pub peer_srt_socket_id: u32,
 
+    // /// # of packets received since last ack was sent
+    // received_since_ack: AtomicU32,
     /// Ack sequence number
     ack_counter: AtomicU32,
-    /// # of packets received since last ack was sent
-    received_since_ack: AtomicU32,
 
+    /// Timestamp of the last **sent** Ack
+    /// (used to caltulate RTT)
     last_ack_timestamp: Mutex<Instant>,
 
     /// Package sequence number of last received data packet
     last_received: AtomicU32,
 
+    /// <add link>
     rtt: AtomicU32,
+    /// <add link>
     rtt_var: AtomicU32,
 }
 
@@ -110,31 +114,51 @@ impl<'c> Connection<'c> {
 
         let established = SystemTime::now();
 
-        Ok(Self {
+        Ok(Self::new(
+            socket,
+            on_data,
+            stream_id,
+            established,
+            addr,
+            peer_srt_socket_id,
+        ))
+    }
+
+    fn new(
+        socket: &'c UdpSocket,
+        on_data: Option<&'c OnDataHandler>,
+        stream_id: Option<String>,
+        established: SystemTime,
+        addr: SocketAddr,
+        peer_srt_socket_id: u32,
+    ) -> Self {
+        Self {
             on_data,
             socket,
             stream_id,
             established,
             addr,
             peer_srt_socket_id,
+
             ack_counter: AtomicU32::new(1),
             last_ack_timestamp: Mutex::new(Instant::now()),
-            received_since_ack: AtomicU32::default(),
-            last_received: AtomicU32::default(),
+            // received_since_ack: AtomicU32::new(0),
+            last_received: AtomicU32::new(0),
+
             rtt: AtomicU32::new(RTT_INIT),
             rtt_var: AtomicU32::new(RTT_VAR_INIT),
-        })
+        }
     }
 
     pub(crate) fn inc_ack(&self) -> u32 {
         self.ack_counter.fetch_add(1, Ordering::Relaxed)
     }
 
-    pub(crate) fn check_ack(&self) -> bool {
-        self.received_since_ack
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| Some((x + 1) % 64))
-            == Ok(0)
-    }
+    // pub(crate) fn check_ack(&self) -> bool {
+    //     self.received_since_ack
+    //         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| Some((x + 1) % 64))
+    //         == Ok(0)
+    // }
 
     #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn pack(&self, content: PacketContent) -> Result<Packet> {
@@ -196,9 +220,11 @@ impl<'c> Connection<'c> {
         if prev_packet_number + 1 != packet_number && data.message_number != 1 {
             tracing::warn!("Missed {} packets", packet_number - prev_packet_number - 1);
 
-            self.send(PacketContent::Control(ControlPacketInfo::Nak(Nak {
-                lost_packet: packet_number - 1,
-            })))?;
+            self.send(PacketContent::Control(ControlPacketInfo::Nak(
+                Nak::Single {
+                    lost_packet: packet_number - 1,
+                },
+            )))?;
         }
 
         tracing::trace!(
