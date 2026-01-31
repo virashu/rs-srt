@@ -24,7 +24,7 @@ impl Descriptor {
 
         Ok(match descriptor_tag {
             descriptor_tags::MPEG4_VIDEO_DESCRIPTOR => {
-                Self::Mpeg4Video(Mpeg4VideoDescriptor::from_raw(raw)?)
+                Self::Mpeg4Video(Mpeg4VideoDescriptor::deserialize(raw)?)
             }
 
             _ => todo!("Descriptor tag '{descriptor_tag}'"),

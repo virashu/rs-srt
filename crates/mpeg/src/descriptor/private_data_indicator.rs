@@ -10,7 +10,7 @@ impl PrivateDataIndicatorDescriptor {
 
     /// # Errors
     /// Error while parsing raw bytes
-    pub fn from_raw(raw: &[u8]) -> Result<Self> {
+    pub fn deserialize(raw: &[u8]) -> Result<Self> {
         Ok(Self {
             private_data_indicator: u32::from_be_bytes(raw[2..6].try_into()?),
         })

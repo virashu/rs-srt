@@ -1,5 +1,6 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use bit::{Bit, Bits};
+use itertools::Itertools;
 
 #[derive(Clone, Debug)]
 pub struct PesExtension {
@@ -42,9 +43,11 @@ pub enum PtsDts {
 }
 
 impl PtsDts {
-    pub fn pts_from_raw(raw: &[u8]) -> Self {
-        let mut pts = 0;
+    pub fn pts_from_raw(raw: [u8; 5]) -> Self {
+        let pts_check = raw.bits::<u8>(0, 4);
+        assert_eq!(pts_check, 0b0010);
 
+        let mut pts = 0;
         pts |= raw.bits::<u64>(4, 3) << 29;
         pts |= raw.bits::<u64>(8, 15) << 15;
         pts |= raw.bits::<u64>(16, 15);
@@ -52,18 +55,22 @@ impl PtsDts {
         Self::Pts { pts }
     }
 
-    pub fn pts_dts_from_raw(raw: &[u8]) -> Self {
-        let mut pts = 0;
+    pub fn pts_dts_from_raw(raw: [u8; 10]) -> Self {
+        let pts_check = raw.bits::<u8>(0, 4);
+        assert_eq!(pts_check, 0b0011);
 
+        let mut pts = 0;
         pts |= raw.bits::<u64>(4, 3) << 29;
         pts |= raw.bits::<u64>(8, 15) << 15;
-        pts |= raw.bits::<u64>(16, 15);
+        pts |= raw.bits::<u64>(24, 15);
+
+        let pts_check = raw.bits::<u8>(40, 4);
+        assert_eq!(pts_check, 0b0001);
 
         let mut dts = 0;
-
         dts |= raw.bits::<u64>(44, 3) << 29;
         dts |= raw.bits::<u64>(48, 15) << 15;
-        dts |= raw.bits::<u64>(66, 15);
+        dts |= raw.bits::<u64>(64, 15);
 
         Self::PtsDts { pts, dts }
     }
@@ -71,6 +78,13 @@ impl PtsDts {
     pub fn pts(&self) -> u64 {
         match self {
             PtsDts::Pts { pts } | PtsDts::PtsDts { pts, .. } => *pts,
+        }
+    }
+
+    pub fn dts(&self) -> Option<u64> {
+        match self {
+            PtsDts::Pts { .. } => None,
+            PtsDts::PtsDts { dts, .. } => Some(*dts),
         }
     }
 }
@@ -97,59 +111,59 @@ pub struct PesHeader {
 impl PesHeader {
     /// # Errors
     /// Error while parsing raw bytes
-    pub fn from_raw(raw: &[u8]) -> Result<Self> {
-        let pes_scrambling_control = raw[0] & 0b0011_0000 >> 4;
-        let pes_priority = raw.bit(4);
-        let data_alignment_indicator = raw.bit(5);
-        let copyright = raw.bit(6);
-        let original_or_copy = raw.bit(7).into();
-        let flags = raw[1];
-        let pes_header_data_length = raw[2];
+    pub fn deserialize(raw: &[u8]) -> Result<Self> {
+        let mut iter = raw.iter().copied();
 
-        let mut offset: usize = 3;
+        // Octet 0
+        let octet_0 = iter.next().unwrap();
+        // Bits [1..=2] = '10'
+        let pes_scrambling_control = (octet_0 & 0b0011_0000) >> 4;
+        let pes_priority = octet_0.bit(4);
+        let data_alignment_indicator = octet_0.bit(5);
+        let copyright = octet_0.bit(6);
+        let original_or_copy = octet_0.bit(7).into();
 
-        let pts_dts = flags
-            .bit(1)
-            .then(|| {
-                if flags.bit(0) {
-                    PtsDts::pts_from_raw(&raw[offset..])
-                } else {
-                    PtsDts::pts_dts_from_raw(&raw[offset..])
-                }
-            })
-            .inspect(|x| match x {
-                PtsDts::Pts { .. } => offset += 5,
-                PtsDts::PtsDts { .. } => offset += 10,
-            });
+        // Octet 1
+        let octet_1 = iter.next().unwrap();
+        let flags_pts_dts = (octet_1 & 0b1100_0000) >> 6;
+        let flag_escr = octet_1.bit(2);
+        let flag_es_rate = octet_1.bit(3);
+        let flag_dsm_trick_mode = octet_1.bit(4);
+        let flag_additional_copy_info = octet_1.bit(5);
+        let flag_pes_crc = octet_1.bit(6);
+        let flag_pes_extension = octet_1.bit(7);
 
-        let escr = raw[1]
-            .bit(2)
-            .then(|| {
-                let mut res = 0;
-                res |= raw[offset..].bits::<u64>(4, 3);
-                res |= raw[offset..].bits::<u64>(8, 15);
-                res |= raw[offset..].bits::<u64>(16, 15);
-                res
-            })
-            .inspect(|_| offset += 6);
+        // Octet 2
+        let pes_header_data_length = iter.next().unwrap();
 
-        let es_rate = raw[1]
-            .bit(3)
-            .then(|| raw[offset..].bits::<u32>(1, 22))
-            .inspect(|_| offset += 3);
+        let pts_dts = match flags_pts_dts {
+            0b10 => Some(PtsDts::pts_from_raw(iter.next_array::<5>().unwrap())),
+            0b11 => Some(PtsDts::pts_dts_from_raw(iter.next_array::<10>().unwrap())),
+            0b01 => bail!("Illegal"),
+            _ => None,
+        };
 
-        let dsm_trick_mode = raw[1].bit(4).then(|| raw[offset]).inspect(|_| offset += 1);
+        let escr = flag_escr.then(|| {
+            let raw_num = iter.next_array::<6>().unwrap();
+            let mut res = 0;
+            res |= raw_num.bits::<u64>(2, 3) << 29;
+            res |= raw_num.bits::<u64>(6, 15) << 15;
+            res |= raw_num.bits::<u64>(22, 15);
+            // TODO: ESCR_extension
+            res
+        });
 
-        let additional_copy_info = raw[1].bit(5).then(|| raw[offset]).inspect(|_| offset += 1);
+        let es_rate = flag_es_rate.then(|| iter.next_array::<3>().unwrap().bits::<u32>(1, 22));
 
-        let previous_pes_crc = raw[1]
-            .bit(6)
-            .then(|| raw[offset..].bits::<u16>(0, 16))
-            .inspect(|_| offset += 2);
+        let dsm_trick_mode = flag_dsm_trick_mode.then(|| iter.next().unwrap());
 
-        let pes_extension = raw[1]
-            .bit(7)
-            .then(|| PesExtension::from_raw(&raw[offset..]))
+        let additional_copy_info = flag_additional_copy_info.then(|| iter.next().unwrap());
+
+        let previous_pes_crc =
+            flag_pes_crc.then(|| iter.next_array::<2>().unwrap().bits::<u16>(0, 16));
+
+        let pes_extension = flag_pes_extension
+            .then(|| PesExtension::from_raw(&iter.collect::<Vec<_>>()))
             .transpose()?;
 
         Ok(Self {
@@ -165,7 +179,7 @@ impl PesHeader {
             dsm_trick_mode,
             additional_copy_info,
             previous_pes_crc,
-            pes_extension: None,
+            pes_extension,
         })
     }
 

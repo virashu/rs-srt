@@ -5,7 +5,7 @@ use crate::transport::adaptation_field_control::AdaptationFieldControl;
 
 #[derive(Debug)]
 pub struct Header {
-    pub pid: u16,
+    pub packet_id: u16,
 
     pub transport_error: bool,
     pub payload_unit_start: bool,
@@ -34,7 +34,7 @@ impl Header {
         let continuity_counter = raw[3] & 0b0000_1111;
 
         Ok(Self {
-            pid: packet_id,
+            packet_id,
 
             transport_error: transport_error_indicator,
             payload_unit_start: payload_unit_start_indicator,

@@ -96,17 +96,11 @@ fn run_srt(
                 }
 
                 // If packet is Video (OBS) + clock
-                Some(Payload::PES(pes)) if pack.header.pid == *clock_pid.borrow() => {
-                    let seconds = pes
-                        .pes_header
-                        .as_ref()
-                        .unwrap()
-                        .pts_dts
-                        .as_ref()
-                        .unwrap()
-                        .pts()
-                        / 90_000;
-                    timer.replace(seconds);
+                Some(Payload::PES(pes)) if pack.header.packet_id == *clock_pid.borrow() => {
+                    if let Some(pts_dts) = &pes.pes_header.as_ref().unwrap().pts_dts {
+                        let seconds = pts_dts.pts() / 90_000;
+                        timer.replace(seconds);
+                    }
                 }
 
                 _ => {}

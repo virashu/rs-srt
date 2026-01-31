@@ -13,7 +13,7 @@ impl Mpeg4VideoDescriptor {
 
     /// # Errors
     /// Error while parsing raw bytes
-    pub fn from_raw(raw: &[u8]) -> Result<Self> {
+    pub fn deserialize(raw: &[u8]) -> Result<Self> {
         Ok(Self {
             mpeg4_visual_profile_and_level: raw[2],
         })

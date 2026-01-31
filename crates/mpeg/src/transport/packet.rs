@@ -56,7 +56,7 @@ impl TransportPacket {
             let payload_body = &raw[(4 + adaptation_field.size())..];
             if header.payload_unit_start {
                 // Contains PES or PSI
-                if GROUP_CONTROL.contains(&header.pid) || pmt_packet_ids.contains(&header.pid) {
+                if GROUP_CONTROL.contains(&header.packet_id) || pmt_packet_ids.contains(&header.packet_id) {
                     Some(Payload::PSI(ProgramSpecificInformation::from_raw(
                         payload_body,
                     )?))

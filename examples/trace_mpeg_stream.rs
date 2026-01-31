@@ -59,7 +59,7 @@ fn main() -> anyhow::Result<()> {
                 _ => {}
             }
 
-            match pack.header.pid {
+            match pack.header.packet_id {
                 // User
                 0x0100 => tracing::info!("OBS Video"),
                 0x0101 => tracing::info!("OBS Audio 1"),
