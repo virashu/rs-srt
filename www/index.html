@@ -15,31 +15,6 @@
             </div>
         </div>
 
-        <script>
-            const video = document.getElementById("video");
-            const videoSrc = "http://127.0.0.1:3000/api/hls/stream.m3u8";
-
-            if (Hls.isSupported()) {
-                const hls = new Hls({ debug: true });
-                hls.loadSource(videoSrc);
-                hls.attachMedia(video);
-            } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-                video.src = videoSrc;
-            }
-
-            const play = document.querySelector(".play");
-
-            function playPauseMedia() {
-                if (video.paused) {
-                    // live stream
-                    video.currentTime = video.duration;
-                    video.play();
-                } else {
-                    video.pause();
-                }
-            }
-
-            play.addEventListener("click", playPauseMedia);
-        </script>
+        <script src="index.js"></script>
     </body>
 </html>
